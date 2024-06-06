@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- <script src="index.js" charset="utf-8"></script> -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/bootstrap/3.2.0/css/bootstrap.css">
+  <link rel="stylesheet" href="css/login.css" type="text/css">
+  <title>login</title>
+</head>
+<body>
+  <div class="login-container" action="/login" method="post" x-data="login">
+    <div class="input-group">
+      <label for="loginId" :class="{'error-label': loginIdError}">ログインID</label>
+        <input type="text" id="loginId" name="loginId" x-model="loginId" @input="handleChangeLoginId" required :class="{'error-input': loginIdError}">
+        <span :class="{'error': true, 'show': loginIdError, 'fade-out': !loginIdError}" x-show="!!loginIdError" x-text="loginIdError"></span>
+    </div>
+
+    <div class="input-group">
+      <label for="password" :class="{'error-label': passwordError}">パスワード</label>
+      <input type="password" id="password" name="password" x-model="password" @input="handleChangePassword" required :class="{'error-input': passwordError}">
+      <span :class="{'error': true, 'show': passwordError, 'fade-out': !passwordError}" x-show="!!passwordError" x-text="passwordError"></span>
+    </div>
+    <div class="input-group">
+      <label for="name" :class="{'error-label': nameError}">Name</label>
+      <input type="text" id="name" name="name" x-model="name" @input="handleChangeName" required :class="{'error-input': nameError}">
+      <span :class="{'error': true, 'show': nameError, 'fade-out': !nameError}" x-show="!!nameError" x-text="nameError"></span>
+    </div>
+
+    <button type="submit" @click="handleClickCreateUser">LOGIN</button>
+    <!-- <button type="submit" @click="handleClickLogin"  x-bind:disabled="isDisabledLoginButton">LOGIN</button> -->
+
+    <p x-show="loginError" >ログインに失敗しました</p>
+  </div>
+  <script>
+  document.addEventListener('alpine:init', () => {
+    Alpine.data("login", () => ({
+      loginId: "",
+      password: "",
+      name: "",
+      loginIdError: "",
+      passwordError: "",
+      nameError: "",
+      isDisabledLoginButton: false,
+      loginError: false,
+      handleChangeLoginId() {
+        if (!this.loginId) {
+          this.loginIdError = "必須です";
+          this.isDisabledLoginButton = true
+          return;
+        }
+        if (!/^[a-zA-Z0-9-_]{8,32}$/.test(this.loginId)){
+          this.loginIdError = "英数字/ハイフン/アンダースコアで8～32桁で指定してください";
+          this.isDisabledLoginButton = true
+
+          return;
+        }
+        this.loginIdError = ""
+        if (this.passwordError === "" && this.password !== "") {
+          this.isDisabledLoginButton = false
+        }
+      },
+      handleChangePassword() {
+        if (!this.password) {
+          this.passwordError = "必須です";
+          this.isDisabledLoginButton = true;
+          return;
+        }
+        if (!/^([a-z0-9!-\/:-@[-`{-~]){8,100}$/i.test(this.password)){
+          this.passwordError = "英数字/記号で8桁以上で指定してください";
+          this.isDisabledLoginButton = true;
+          return;
+        }
+        this.passwordError = ""
+        if (this.loginIdError === "" && this.loginId !== "") {
+          this.isDisabledLoginButton = false
+        }
+      },
+      handleChangeName() {
+        if (!this.name) {
+          this.nameError = "必須です";
+          this.isDisabledLoginButton = true
+          return;
+        }
+        if (!/^[a-zA-Z0-9-_]{8,32}$/.test(this.name)){
+          this.nameError = "英数字/ハイフン/アンダースコアで8～32桁で指定してください";
+          this.isDisabledLoginButton = true
+
+          return;
+        }
+        this.nameError = ""
+        if (this.passwordError === "" && this.password !== "") {
+          this.isDisabledLoginButton = false
+        }
+      },
+      get_host_info() {
+        const protocol = window.location.protocol.split(':')[0];
+        const host = window.location.host.split(':')[0];
+        let port = window.location.host.split(':')[1];
+        if (port === undefined) {
+          if (protocol == 'http') { port = 80 }
+          else if (protocol == 'https') { port = 443 }
+          else { port = 0 }
+        }
+        return { protocol, host, port };
+      },
+      create_request(url_path, param) {
+        const { protocol, host, port } = this.get_host_info();
+        const url = `${protocol}://${host}:${port}/${url_path}`;
+        // リクエストヘッダーの生成
+        const headers = new Headers();
+        headers.append('Content-Type', 'application/json');
+
+        // リクエストの構築
+        const request = new Request(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(param)
+        });
+        return request
+      },
+      async handleClickLogin() {
+        post_data = { "login_id": this.loginId, "password": this.password }
+        request = this.create_request("login", post_data)
+        await fetch(request).then(response => {
+              // レスポンス変換
+              return response.json();
+            })
+            .then(data => {
+              // データ処理
+              return data
+            })
+            .catch(error => {
+              // エラー処理
+              loginError = True
+              return error
+            });
+      },
+      async handleClickCreateUser() {
+        post_data = { "login_id": this.loginId, "password": this.password, "user_name": this.name}
+        request = this.create_request("createUser", post_data)
+        await fetch(request).then(response => {
+              // レスポンス変換
+              return response.json();
+            })
+            .then(data => {
+              // データ処理
+              return data
+            })
+            .catch(error => {
+              // エラー処理
+              loginError = True
+              return error
+            });
+      },
+    }))
+  });
+  </script>
+ </body>
+</html>

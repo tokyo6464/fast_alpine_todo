@@ -1,0 +1,120 @@
+@keyframes fadeInUp {
+  from {
+      opacity: 0;
+      transform: translateY(-10px);
+  }
+  to {
+      opacity: 1;
+      transform: translateY(0);
+  }
+}
+@keyframes fadeOutDown {
+  from {
+      opacity: 1;
+      transform: translateY(0);
+  }
+  to {
+      opacity: 0;
+      transform: translateY(10px);
+  }
+}
+
+.error {
+  display: none; /* 初期状態では非表示 */
+  color: #ff5252;
+  margin-left: 8px;
+  margin-top: 5px;
+}
+
+.error.show {
+  display: block;
+  animation: fadeInUp 0.3s ease-out forwards; /* アニメーションの適用 */
+}
+
+.error.fade-out {
+  animation: fadeOutDown 0.3s ease-out forwards;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f4f4f9;
+  font-family: 'Arial', sans-serif;
+  margin: 0;
+}
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 640px;
+  margin: 20px 40px;
+}
+
+.input-group {
+  width: 100%;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.3s ease-in-out, background-color 0.3s ease-in-out; /* 遷移を追加 */
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: #6658f6;
+}
+
+label {
+  position: absolute;
+  top: -7px;
+  left: 10px;
+  background-color: #fff;
+  padding: 0 5px;
+  font-size: 14px;
+  color: #666;
+  transition: border-color 0.3s ease-in-out, background-color 0.3s ease-in-out; /* 遷移を追加 */
+}
+
+.error-label {
+  color: #ff5252 !important;
+}
+
+.error-input {
+  border-color: #ff5252 !important;
+}
+
+button {
+  width: 30%;
+  padding: 10px;
+  border: none;
+  background-color: #6658f6;
+  color: #fff;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: #5848c2;
+  }
+
+  &:disabled {
+    background-color: #ddd;
+  }
+}
