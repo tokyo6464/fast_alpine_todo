@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import os
 import json
 
@@ -18,9 +18,11 @@ def get_user_db():
     return users
 
 
-def get_user_password(login_id: str) -> Optional[str]:
+def get_user_password_name(
+    login_id: str,
+) -> Tuple[Optional[str], Optional[str]]:
     """
-    パスワード情報をDBから取得する
+    パスワードとユーザー名をDBから取得する
     """
     # json.load関数を使ったjsonファイルの読み込み
     with open(users_file_path) as f:
@@ -31,9 +33,9 @@ def get_user_password(login_id: str) -> Optional[str]:
 
     for user in users:
         if user["id"] == login_id:
-            return user["password"]
+            return user["password"], user["name"]
 
-    return None
+    return None, None
 
 
 def create_user(login_id: str, password: str, user_name: str) -> bool:

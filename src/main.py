@@ -1,11 +1,12 @@
 import uvicorn
 from fastapi import FastAPI, Query, Response, status
 from pydantic import BaseModel
-from typing import Tuple, Union
+from typing import Tuple, Union, Literal
 from fastapi.staticfiles import StaticFiles
 import os
 import uuid
 import db
+from datetime import datetime
 
 import bcrypt
 
@@ -38,6 +39,23 @@ class CreateUserParam(BaseModel):
     user_name: str = Query(..., min_length=2, max_length=64)
 
 
+class TaskBase(BaseModel):
+    user_id: str
+
+
+class CreateTaskParam(TaskBase):
+    content: str
+
+
+class UpdateTaskParam(TaskBase):
+    task_id: int
+    done_flg: Literal["0", "1"]
+
+
+class DeleteTaskParam(TaskBase):
+    task_id: int
+
+
 def create_password_hash(plain_password: str) -> str:
     return bcrypt.hashpw(plain_password.encode(), bcrypt.gensalt()).decode()
 
@@ -54,27 +72,30 @@ def _set_cookie(response: Response, session_key: str) -> None:
     )
 
 
-def check_login(login_param: LoginParam) -> Tuple[bool, Union[str, None]]:
+def check_login(
+    login_param: LoginParam,
+) -> Tuple[bool, Union[str, None], Union[str, None]]:
     db_password: Union[str, None] = None
+    db_user_name: Union[str, None] = None
 
-    db_password = db.get_user_password(login_param.login_id)
+    db_password, db_user_name = db.get_user_password_name(login_param.login_id)
 
     print(db_password)
 
     # ログインID不一致
     if db_password is None:
-        return False, None
+        return False, None, None
 
     # パスワード不一致
     if verify_password(login_param.password, db_password) is False:
-        return False, None
+        return False, None, None
     print("create_password_hash", create_password_hash(login_param.password))
 
     # 認証成功
     # セッションCookieの払い出し
     session_key = str(uuid.uuid4())
 
-    return True, session_key
+    return True, db_user_name, session_key
 
 
 def create_new_user(login_id: str, password: str, user_name: str) -> bool:
@@ -87,8 +108,9 @@ def hello():
 
 
 @app.post("/login")
-def login(login_param: LoginParam, response: Response):
-    result, session_key = check_login(login_param)
+def login(login_param: LoginParam):
+    response = Response()
+    result, user_name, session_key = check_login(login_param)
 
     print("result", result)
     print("session_key", session_key)
@@ -97,11 +119,11 @@ def login(login_param: LoginParam, response: Response):
         response.status_code = status.HTTP_401_UNAUTHORIZED
         # _reset_cookie(response)
         print(response)
-        return {"status": "FAILURE", "msg": "Unauthorized"}
+        return {"errMsg": "Unauthorized"}
 
     # Cookieにセッションキーを付加してユーザ情報を返却
     _set_cookie(response, str(session_key))
-    return {"status": "SUCCESS", "id": login_param.login_id}
+    return {"id": login_param.login_id, "name": user_name}
 
 
 @app.post("/createUser")
@@ -124,6 +146,61 @@ async def create_user(
 
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
+
+
+@app.get("/tasks")
+async def get_tasks(user_id: str):
+    """
+    user_idに紐づくタスクをDBから全件取得する
+    """
+
+    # TEST: user_id=1であればタスク一覧を返す
+    if user_id == "1":
+        return {
+            "tasks": [
+                {
+                    "id": 1,
+                    "content": "hoge1",
+                    "done_flg": "0",
+                },
+                {
+                    "id": 2,
+                    "content": "hoge2",
+                    "done_flg": "1",
+                },
+            ],
+            "update_time": "2024-01-01 00:00:00.000000",
+        }
+    else:
+        return {
+            "tasks": [],
+            "update_time": "",
+        }
+
+
+@app.post("/tasks")
+async def create_task(user_id: str, content: str):
+    # 登録したデータのid, 更新日時
+    task_id = 1
+    update_time = datetime.now()
+
+    return {"id": task_id, "update_time": update_time}
+
+
+@app.put("/tasks/{task_id}")
+async def update_task(task_id: int, update_task_param: UpdateTaskParam):
+    # 対象データの更新日時
+    update_time = datetime.now()
+
+    return {"id": task_id, "update_time": update_time}
+
+
+@app.delete("/tasks/{task_id}")
+async def delete_task(task_id: int, delete_task_param: DeleteTaskParam):
+    # 対象データの更新日時
+    update_time = datetime.now()
+
+    return {"id": task_id, "update_time": update_time}
 
 
 app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
