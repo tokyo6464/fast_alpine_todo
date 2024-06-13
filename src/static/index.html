@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <!-- <script src="index.js" charset="utf-8"></script> -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/bootstrap/3.2.0/css/bootstrap.css">
   <link rel="stylesheet" href="css/login.css" type="text/css">
   <title>login</title>
 </head>
 <body>
-  <div class="login-container" action="/login" method="post" x-data="login">
+  <div class="login-container" x-data="login">
     <div class="input-group">
       <label for="loginId" :class="{'error-label': loginIdError}">ログインID</label>
         <input type="text" id="loginId" name="loginId" x-model="loginId" @input="handleChangeLoginId" required :class="{'error-input': loginIdError}">
@@ -23,9 +22,8 @@
       <span :class="{'error': true, 'show': passwordError, 'fade-out': !passwordError}" x-show="!!passwordError" x-text="passwordError"></span>
     </div>
 
-    <button type="submit" @click="handleClickLogin"  x-bind:disabled="isDisabledLoginButton">LOGIN</button>
-
-    <p x-show="loginError" >ログインに失敗しました</p>
+    <button type="submit" @click="handleClickLogin"  x-bind:disabled="isDisabledLoginButton">ログイン</button>
+    <a href="/signup">サインアップ画面へ</a>
   </div>
   <script>
   document.addEventListener('alpine:init', () => {
@@ -35,7 +33,6 @@
       loginIdError: "",
       passwordError: "",
       isDisabledLoginButton: true,
-      loginError: false,
       handleChangeLoginId() {
         if (!this.loginId) {
           this.loginIdError = "必須です";
@@ -108,10 +105,10 @@
             })
             .catch(error => {
               // エラー処理
-              loginError = True
+              alert("ログインに失敗しました")
               return error
             });
-      },　
+      },
     }))
   });
   </script>

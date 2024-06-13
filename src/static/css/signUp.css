@@ -45,7 +45,7 @@ body {
   margin: 0;
 }
 
-.login-container {
+.sign-up-container {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -104,10 +104,10 @@ label {
 }
 
 .login-error.show {
-  display: block;
-  color: #ff5252;
-  margin-top: 4px;
-  margin-bottom: 0;
+    display: block;
+    color: #ff5252;
+    margin-top: 4px;
+    margin-bottom: 0;
   animation: fadeInUp 0.3s ease-out forwards; /* アニメーションの適用 */
 }
 

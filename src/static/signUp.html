@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <!-- <script src="index.js" charset="utf-8"></script> -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/bootstrap/3.2.0/css/bootstrap.css">
-  <link rel="stylesheet" href="css/login.css" type="text/css">
-  <title>login</title>
+  <link rel="stylesheet" href="css/signUp.css" type="text/css">
+  <title>signUp</title>
 </head>
 <body>
-  <div class="login-container" action="/login" method="post" x-data="login">
+  <div class="sign-up-container" x-data="login">
     <div class="input-group">
       <label for="loginId" :class="{'error-label': loginIdError}">ログインID</label>
         <input type="text" id="loginId" name="loginId" x-model="loginId" @input="handleChangeLoginId" required :class="{'error-input': loginIdError}">
@@ -23,50 +22,74 @@
       <span :class="{'error': true, 'show': passwordError, 'fade-out': !passwordError}" x-show="!!passwordError" x-text="passwordError"></span>
     </div>
 
-    <button type="submit" @click="handleClickLogin"  x-bind:disabled="isDisabledLoginButton">LOGIN</button>
+    <div class="input-group">
+      <label for="user_name" :class="{'error-label': nameError}">名前</label>
+      <input type="text" id="user_name" name="user_name" x-model="user_name" @input="handleChangeName" required :class="{'error-input': nameError}">
+      <span :class="{'error': true, 'show': nameError, 'fade-out': !nameError}" x-show="!!nameError" x-text="nameError"></span>
+    </div>
 
-    <p x-show="loginError" >ログインに失敗しました</p>
+    <button type="submit" @click="handleClickSignUp" x-bind:disabled="isDisabledSignUpButton">サインアップ</button>
+    <a href="/">ログイン画面へ</a>
   </div>
   <script>
   document.addEventListener('alpine:init', () => {
     Alpine.data("login", () => ({
       loginId: "",
       password: "",
+      user_name: "",
       loginIdError: "",
       passwordError: "",
-      isDisabledLoginButton: true,
-      loginError: false,
+      nameError: "",
+      isDisabledSignUpButton: true,
       handleChangeLoginId() {
         if (!this.loginId) {
           this.loginIdError = "必須です";
-          this.isDisabledLoginButton = true
+          this.isDisabledSignUpButton = true
           return;
         }
         if (!/^[a-zA-Z0-9-_]{8,32}$/.test(this.loginId)){
           this.loginIdError = "英数字/ハイフン/アンダースコアで8～32桁で指定してください";
-          this.isDisabledLoginButton = true
-
+          this.isDisabledSignUpButton = true
           return;
         }
         this.loginIdError = ""
-        if (this.passwordError === "" && this.password !== "") {
-          this.isDisabledLoginButton = false
+        if (this.passwordError === "" && this.password !== "" && this.nameError === "" && this.user_name !== "") {
+          this.isDisabledSignUpButton = false
         }
       },
       handleChangePassword() {
         if (!this.password) {
+          this.resetLoginError();
           this.passwordError = "必須です";
-          this.isDisabledLoginButton = true;
+          this.isDisabledSignUpButton = true;
           return;
         }
         if (!/^([a-z0-9!-\/:-@[-`{-~]){8,100}$/i.test(this.password)){
           this.passwordError = "英数字/記号で8桁以上で指定してください";
-          this.isDisabledLoginButton = true;
+          this.isDisabledSignUpButton = true;
           return;
         }
         this.passwordError = ""
-        if (this.loginIdError === "" && this.loginId !== "") {
-          this.isDisabledLoginButton = false
+        if (this.loginIdError === "" && this.loginId !== "" && this.nameError === "" && this.user_name !== "") {
+          this.isDisabledSignUpButton = false
+        }
+      },
+      handleChangeName() {
+        if (!this.user_name) {
+          this.resetLoginError();
+          this.nameError = "必須です";
+          this.isDisabledSignUpButton = true
+          return;
+        }
+        if (!/^[a-zA-Z0-9-_]{8,32}$/.test(this.user_name)){
+          this.nameError = "英数字/ハイフン/アンダースコアで4～32桁で指定してください";
+          this.isDisabledSignUpButton = true
+
+          return;
+        }
+        this.nameError = ""
+        if (this.loginIdError === "" && this.loginId !== "" && this.passwordError === "" && this.password !== "") {
+          this.isDisabledSignUpButton = false
         }
       },
       get_host_info() {
@@ -95,9 +118,9 @@
         });
         return request
       },
-      async handleClickLogin() {
-        post_data = { "login_id": this.loginId, "password": this.password }
-        request = this.create_request("login", post_data)
+      async handleClickSignUp() {
+        post_data = { "login_id": this.loginId, "password": this.password, "user_name": this.user_name }
+        request = this.create_request("createUser", post_data)
         await fetch(request).then(response => {
               // レスポンス変換
               return response.json();
@@ -108,10 +131,10 @@
             })
             .catch(error => {
               // エラー処理
-              loginError = True
+              alert("ユーザー登録に失敗しました")
               return error
             });
-      },　
+      },
     }))
   });
   </script>
