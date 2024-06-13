@@ -1,8 +1,10 @@
 import uvicorn
-from fastapi import FastAPI, Query, Response, status
+from fastapi import FastAPI, Query, Request, Response, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Tuple, Union, Literal
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import os
 import uuid
 import db
@@ -22,7 +24,6 @@ session_max_age_sec = 28800
 # 静的ファイルを提供するディレクトリのパス
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 
-
 # ディレクトリが存在するか確認
 if not os.path.isdir(static_dir):
     raise RuntimeError(f"Directory '{static_dir}' does not exist")
@@ -40,7 +41,7 @@ class CreateUserParam(BaseModel):
 
 
 class TaskBase(BaseModel):
-    user_id: str
+    login_id: str
 
 
 class CreateTaskParam(TaskBase):
@@ -54,6 +55,11 @@ class UpdateTaskParam(TaskBase):
 
 class DeleteTaskParam(TaskBase):
     task_id: int
+
+
+# new テンプレート関連の設定 (jinja2)
+templates = Jinja2Templates(directory=static_dir)
+jinja_env = templates.env  # Jinja2.Environment : filterやglobalの設定用
 
 
 def create_password_hash(plain_password: str) -> str:
@@ -78,7 +84,9 @@ def check_login(
     db_password: Union[str, None] = None
     db_user_name: Union[str, None] = None
 
-    db_password, db_user_name = db.get_user_password_name(login_param.login_id)
+    db_password, db_user_name = db.get_user_password_name(
+        login_param.login_id
+    )
 
     print(db_password)
 
@@ -99,12 +107,9 @@ def check_login(
 
 
 def create_new_user(login_id: str, password: str, user_name: str) -> bool:
-    return db.create_user(login_id, create_password_hash(password), user_name)
-
-
-@app.get("/hello")
-def hello():
-    return {"status": "SUCCESS", "msg": "Hello, World!"}
+    return db.create_user(
+        login_id, create_password_hash(password), user_name
+    )
 
 
 @app.post("/login")
@@ -118,8 +123,8 @@ def login(login_param: LoginParam):
     if result is False:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         # _reset_cookie(response)
-        print(response)
-        return {"errMsg": "Unauthorized"}
+
+        return response
 
     # Cookieにセッションキーを付加してユーザ情報を返却
     _set_cookie(response, str(session_key))
@@ -149,13 +154,13 @@ async def create_user(
 
 
 @app.get("/tasks")
-async def get_tasks(user_id: str):
+async def get_tasks(login_id: str):
     """
-    user_idに紐づくタスクをDBから全件取得する
+    login_idに紐づくタスクをDBから全件取得する
     """
 
-    # TEST: user_id=1であればタスク一覧を返す
-    if user_id == "1":
+    # TEST: login_id=1であればタスク一覧を返す
+    if login_id == "1":
         return {
             "tasks": [
                 {
@@ -179,7 +184,7 @@ async def get_tasks(user_id: str):
 
 
 @app.post("/tasks")
-async def create_task(user_id: str, content: str):
+async def create_task(login_id: str, content: str):
     # 登録したデータのid, 更新日時
     task_id = 1
     update_time = datetime.now()
@@ -201,6 +206,18 @@ async def delete_task(task_id: int, delete_task_param: DeleteTaskParam):
     update_time = datetime.now()
 
     return {"id": task_id, "update_time": update_time}
+
+
+@app.get("/signup", response_class=HTMLResponse)
+async def read_sign_up(request: Request):
+    context = {"request": request}
+    return templates.TemplateResponse("signUp.html", context)
+
+
+@app.get("/todos", response_class=HTMLResponse)
+async def read_todos(request: Request):
+    context = {"request": request}
+    return templates.TemplateResponse("todos.html", context)
 
 
 app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")

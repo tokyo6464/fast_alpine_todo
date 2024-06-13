@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/bootstrap/3.2.0/css/bootstrap.css">
+  <link rel="stylesheet" href="css/todos.css" type="text/css">
+  <title>todos</title>
+</head>
+<body>
+  <div class="container" x-data="todoApp">
+    <h1>TODO 一覧</h1>
+    <div class="input-group">
+      <input type="text" placeholder="New task" x-model="newTodo" @keydown.enter="addTodo">
+      <button @click="addTodo">追加</button>
+    </div>
+    <ul>
+      <template x-for="(todo, index) in todos" :key="index">
+        <li>
+          <span :class="{ 'completed': todo.completed }" @click="toggleComplete(index)" x-text="todo.text"></span>
+          <div>
+            <button class="update" @click="editTask(index)">更新</button>
+            <button class="delete" @click="removeTodo(index)">削除</button>
+        </div>
+        </li>
+      </template>
+    </ul>
+
+    <!-- モーダル -->
+    <div x-show="isModalOpen" class="modal">
+      <div class="modal-content">
+        <span class="close" @click="closeModal">&times;</span>
+        <h2>TODO更新</h2>
+        <div class="input-container">
+          <input type="text" x-model="updatedTask" @keydown.enter="updateTask">
+          <button class="update" @click="updateTask">更新</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('todoApp', () => ({
+        newTodo: '',
+        todos: [],
+        isModalOpen: false,
+        updatedTask: '',
+        currentTaskIndex: null,
+        addTodo() {
+          if (this.newTodo.trim() !== '') {
+            this.todos.push({ text: this.newTodo, completed: false });
+            this.newTodo = '';
+          }
+        },
+        toggleComplete(index) {
+          this.todos[index].completed = !this.todos[index].completed;
+        },
+        removeTodo(index) {
+          this.todos.splice(index, 1);
+        },
+        editTask(index) {
+          this.currentTaskIndex = index;
+          this.updatedTask = this.todos[index].text;
+          this.isModalOpen = true;
+        },
+        closeModal() {
+          this.isModalOpen = false;
+          this.updatedTask = '';
+          this.currentTaskIndex = null;
+        },
+        updateTask() {
+          if (this.updatedTask.trim() !== '') {
+            this.todos[this.currentTaskIndex].text = this.updatedTask;
+            this.closeModal();
+          }
+        }
+      }));
+    });
+  </script>
+</body>
+</html>
