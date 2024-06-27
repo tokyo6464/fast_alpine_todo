@@ -70,7 +70,7 @@ span {
   cursor: pointer;
 }
 
-span.completed {
+span.done {
   text-decoration: line-through;
   color: #888;
 }

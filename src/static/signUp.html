@@ -122,18 +122,18 @@
         post_data = { "login_id": this.loginId, "password": this.password, "user_name": this.user_name }
         request = this.create_request("createUser", post_data)
         await fetch(request).then(response => {
-              // レスポンス変換
-              return response.json();
-            })
-            .then(data => {
-              // データ処理
-              return data
-            })
-            .catch(error => {
-              // エラー処理
-              alert("ユーザー登録に失敗しました")
-              return error
-            });
+          // レスポンス変換
+          return response.json();
+        })
+        .then(data => {
+          // データ処理
+          return data
+        })
+        .catch(error => {
+          // エラー処理
+          alert("ユーザー登録に失敗しました")
+          return error
+        });
       },
     }))
   });

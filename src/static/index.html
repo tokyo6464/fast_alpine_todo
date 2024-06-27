@@ -33,6 +33,32 @@
       loginIdError: "",
       passwordError: "",
       isDisabledLoginButton: true,
+      get_host_info() {
+        const protocol = window.location.protocol.split(':')[0];
+        const host = window.location.host.split(':')[0];
+        let port = window.location.host.split(':')[1];
+        if (port === undefined) {
+          if (protocol == 'http') { port = 80 }
+          else if (protocol == 'https') { port = 443 }
+          else { port = 0 }
+        }
+        return { protocol, host, port };
+      },
+      create_request(url_path, param) {
+        const { protocol, host, port } = this.get_host_info();
+        const url = `${protocol}://${host}:${port}/${url_path}`;
+        // リクエストヘッダーの生成
+        const headers = new Headers();
+        headers.append('Content-Type', 'application/json');
+
+        // リクエストの構築
+        const request = new Request(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(param)
+        });
+        return request
+      },
       handleChangeLoginId() {
         if (!this.loginId) {
           this.loginIdError = "必須です";
@@ -66,48 +92,25 @@
           this.isDisabledLoginButton = false
         }
       },
-      get_host_info() {
-        const protocol = window.location.protocol.split(':')[0];
-        const host = window.location.host.split(':')[0];
-        let port = window.location.host.split(':')[1];
-        if (port === undefined) {
-          if (protocol == 'http') { port = 80 }
-          else if (protocol == 'https') { port = 443 }
-          else { port = 0 }
-        }
-        return { protocol, host, port };
-      },
-      create_request(url_path, param) {
-        const { protocol, host, port } = this.get_host_info();
-        const url = `${protocol}://${host}:${port}/${url_path}`;
-        // リクエストヘッダーの生成
-        const headers = new Headers();
-        headers.append('Content-Type', 'application/json');
-
-        // リクエストの構築
-        const request = new Request(url, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(param)
-        });
-        return request
-      },
       async handleClickLogin() {
         post_data = { "login_id": this.loginId, "password": this.password }
         request = this.create_request("login", post_data)
+        console.log(request)
         await fetch(request).then(response => {
-              // レスポンス変換
-              return response.json();
-            })
-            .then(data => {
-              // データ処理
-              return data
-            })
-            .catch(error => {
-              // エラー処理
-              alert("ログインに失敗しました")
-              return error
-            });
+          // レスポンス変換
+          return response.json();
+        })
+        .then(data => {
+          // データ処理
+          console.log("ログイン成功")
+          location.href = "/todos"
+          return
+        })
+        .catch(error => {
+          // エラー処理
+          alert("ログインに失敗しました")
+          return error
+        });
       },
     }))
   });

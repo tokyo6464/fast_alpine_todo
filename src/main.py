@@ -1,8 +1,8 @@
 import uvicorn
-from fastapi import FastAPI, Query, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Query, Request, Response, status, Cookie
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Tuple, Union, Literal
+from typing import Tuple, Union, Literal, Optional, Dict, Any
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
@@ -57,6 +57,7 @@ class DeleteTaskParam(TaskBase):
     task_id: int
 
 
+# TODO Cookieの有効期限の再設定
 # new テンプレート関連の設定 (jinja2)
 templates = Jinja2Templates(directory=static_dir)
 jinja_env = templates.env  # Jinja2.Environment : filterやglobalの設定用
@@ -75,6 +76,8 @@ def _set_cookie(response: Response, session_key: str) -> None:
         key="todo_session_key",
         value=str(session_key),
         max_age=int(session_max_age_sec),
+        httponly=True,  # JavaScriptからアクセスできないようにする
+        # httponly=True,  # JavaScriptからアクセスできないようにする
     )
 
 
@@ -97,13 +100,28 @@ def check_login(
     # パスワード不一致
     if verify_password(login_param.password, db_password) is False:
         return False, None, None
-    print("create_password_hash", create_password_hash(login_param.password))
 
     # 認証成功
     # セッションCookieの払い出し
     session_key = str(uuid.uuid4())
 
+    # DBへのセッションCookieの設定
+    db.update_login_info(login_param.login_id, session_key)
+
     return True, db_user_name, session_key
+
+
+def get_user_info_by_session_key(
+    session_key: str,
+) -> Optional[Dict[str, Any]]:
+    login_id, user_name = db.get_user_info_by_session_key(session_key)
+    if login_id is None:
+        return None
+
+    return {
+        "login_id": login_id,
+        "user_name": user_name,
+    }
 
 
 def create_new_user(login_id: str, password: str, user_name: str) -> bool:
@@ -127,8 +145,31 @@ def login(login_param: LoginParam):
         return response
 
     # Cookieにセッションキーを付加してユーザ情報を返却
+    response = JSONResponse(
+        content={"id": login_param.login_id, "name": user_name}
+    )
+
+    # Cookieにセッションキーを付加してユーザ情報を返却
     _set_cookie(response, str(session_key))
-    return {"id": login_param.login_id, "name": user_name}
+    return response
+
+
+@app.get("/myself")
+def get_myself(todo_session_key: Optional[str] = Cookie(None)):
+    response = Response()
+    print(todo_session_key)
+
+    if todo_session_key is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
+
+    myself = get_user_info_by_session_key(str(todo_session_key))
+
+    if myself is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
+
+    return myself
 
 
 @app.post("/createUser")
@@ -154,28 +195,15 @@ async def create_user(
 
 
 @app.get("/tasks")
-async def get_tasks(login_id: str):
+async def get_tasks(todo_session_key: Optional[str] = Cookie(None)):
     """
     login_idに紐づくタスクをDBから全件取得する
     """
-
+    result = db.get_tasks_info_by_user_id(todo_session_key)
+    print("タスク一覧", result)
     # TEST: login_id=1であればタスク一覧を返す
-    if login_id == "1":
-        return {
-            "tasks": [
-                {
-                    "id": 1,
-                    "content": "hoge1",
-                    "done_flg": "0",
-                },
-                {
-                    "id": 2,
-                    "content": "hoge2",
-                    "done_flg": "1",
-                },
-            ],
-            "update_time": "2024-01-01 00:00:00.000000",
-        }
+    if result:
+        return result
     else:
         return {
             "tasks": [],
