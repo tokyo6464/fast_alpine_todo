@@ -40,20 +40,16 @@ class CreateUserParam(BaseModel):
     user_name: str = Query(..., min_length=2, max_length=64)
 
 
-class TaskBase(BaseModel):
-    login_id: str
-
-
-class CreateTaskParam(TaskBase):
+class CreateTaskParam(BaseModel):
     content: str
 
 
-class UpdateTaskParam(TaskBase):
+class UpdateTaskParam(BaseModel):
     task_id: int
     done_flg: Literal["0", "1"]
 
 
-class DeleteTaskParam(TaskBase):
+class DeleteTaskParam(BaseModel):
     task_id: int
 
 
@@ -76,9 +72,13 @@ def _set_cookie(response: Response, session_key: str) -> None:
         key="todo_session_key",
         value=str(session_key),
         max_age=int(session_max_age_sec),
-        httponly=True,  # JavaScriptからアクセスできないようにする
+        httponly=True,
         # httponly=True,  # JavaScriptからアクセスできないようにする
     )
+
+
+def get_login_id_by_cookie(session_key: str) -> Optional[str]:
+    return db.get_login_id_by_session_key(session_key)
 
 
 def check_login(
@@ -90,8 +90,6 @@ def check_login(
     db_password, db_user_name = db.get_user_password_name(
         login_param.login_id
     )
-
-    print(db_password)
 
     # ログインID不一致
     if db_password is None:
@@ -135,8 +133,6 @@ def login(login_param: LoginParam):
     response = Response()
     result, user_name, session_key = check_login(login_param)
 
-    print("result", result)
-    print("session_key", session_key)
     # 認証エラー
     if result is False:
         response.status_code = status.HTTP_401_UNAUTHORIZED
@@ -157,7 +153,6 @@ def login(login_param: LoginParam):
 @app.get("/myself")
 def get_myself(todo_session_key: Optional[str] = Cookie(None)):
     response = Response()
-    print(todo_session_key)
 
     if todo_session_key is None:
         response.status_code = status.HTTP_401_UNAUTHORIZED
@@ -190,8 +185,12 @@ async def create_user(
         response.status_code = status.HTTP_409_CONFLICT
         return response
 
-    response.status_code = status.HTTP_204_NO_CONTENT
-    return response
+    # ユーザーに紐づく初期状態のタスク情報を作成
+    db.create_task(create_user_param.login_id, "")
+    return {
+        "id": create_user_param.login_id,
+        "name": create_user_param.user_name,
+    }
 
 
 @app.get("/tasks")
@@ -200,8 +199,6 @@ async def get_tasks(todo_session_key: Optional[str] = Cookie(None)):
     login_idに紐づくタスクをDBから全件取得する
     """
     result = db.get_tasks_info_by_user_id(todo_session_key)
-    print("タスク一覧", result)
-    # TEST: login_id=1であればタスク一覧を返す
     if result:
         return result
     else:
@@ -212,16 +209,36 @@ async def get_tasks(todo_session_key: Optional[str] = Cookie(None)):
 
 
 @app.post("/tasks")
-async def create_task(login_id: str, content: str):
-    # 登録したデータのid, 更新日時
-    task_id = 1
-    update_time = datetime.now()
+async def create_task(
+    new_task: CreateTaskParam, todo_session_key: Optional[str] = Cookie(None)
+):
+    response = Response()
 
-    return {"id": task_id, "update_time": update_time}
+    # セッションチェック/権限チェック
+    if todo_session_key is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
+
+    login_id = get_login_id_by_cookie(todo_session_key)
+
+    # 登録したデータのid, 更新日時
+    result = db.create_task(login_id, new_task.content)
+
+    return result
 
 
 @app.put("/tasks/{task_id}")
-async def update_task(task_id: int, update_task_param: UpdateTaskParam):
+async def update_task(
+    task_id: int,
+    update_task_param: UpdateTaskParam,
+    todo_session_key: Optional[str] = Cookie(None),
+):
+    response = Response()
+
+    # セッションチェック/権限チェック
+    if todo_session_key is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
     # 対象データの更新日時
     update_time = datetime.now()
 
@@ -229,7 +246,17 @@ async def update_task(task_id: int, update_task_param: UpdateTaskParam):
 
 
 @app.delete("/tasks/{task_id}")
-async def delete_task(task_id: int, delete_task_param: DeleteTaskParam):
+async def delete_task(
+    task_id: int,
+    delete_task_param: DeleteTaskParam,
+    todo_session_key: Optional[str] = Cookie(None),
+):
+    response = Response()
+
+    # セッションチェック/権限チェック
+    if todo_session_key is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
     # 対象データの更新日時
     update_time = datetime.now()
 

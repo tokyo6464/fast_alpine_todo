@@ -81,7 +81,7 @@
           this.isDisabledSignUpButton = true
           return;
         }
-        if (!/^[a-zA-Z0-9-_]{8,32}$/.test(this.user_name)){
+        if (!/^[a-zA-Z0-9-_]{4,32}$/.test(this.user_name)){
           this.nameError = "英数字/ハイフン/アンダースコアで4～32桁で指定してください";
           this.isDisabledSignUpButton = true
 
@@ -127,12 +127,16 @@
         })
         .then(data => {
           // データ処理
-          return data
+          this.loginId = ""
+          this.password = ""
+          this.user_name = ""
+          alert("ユーザー")
+          return
         })
         .catch(error => {
           // エラー処理
           alert("ユーザー登録に失敗しました")
-          return error
+          return
         });
       },
     }))

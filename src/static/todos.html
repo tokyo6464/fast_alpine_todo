@@ -93,12 +93,12 @@
           const request = new Request(url, {
             method: method,
             headers: headers,
-            body: param ? param : null
+            body: param ? JSON.stringify(param) : null
           });
           return request
         },
         async getTasks() {
-          request = this.create_request("tasks", "GET")
+          const request = this.create_request("tasks", "GET")
           await fetch(request).then(response => {
             // レスポンス変換
             return response.json();
@@ -117,7 +117,7 @@
         },
         // セッションCookieをキーとして自己情報を取得することで、ログイン状態かを判断し、表示する自己情報を取得する
         async check_session() {
-          request = this.create_request("myself", "GET")
+          const request = this.create_request("myself", "GET")
           await fetch(request).then(response => {
             // レスポンス変換
             return response.json();
@@ -157,12 +157,32 @@
           this.updateTaskContent = '';
           this.currentTaskIndex = null;
         },
-        addTask() {
-          console.log("this.newTaskContent", this.newTaskContent)
+        async addTask() {
           if (this.newTaskContent.trim() !== '') {
-            this.todos.push({ content: this.newTaskContent, done_flg: "0" });
-            this.newTaskContent = '';
-            this.closeAddModal();
+            const request = this.create_request("tasks", "POST", {"content": this.newTaskContent})
+            let isError = false
+            await fetch(request).then(response => {
+              // レスポンス変換s
+              return response.json();
+            })
+            .then(data => {
+              // データ処理
+              console.log("res", data["task_list"])
+              this.todos = data["task_list"]
+              return
+              })
+            .catch(error => {
+              // エラー処理
+              alert("タスク登録に失敗しました")
+              isError = true
+              return error
+            });
+
+            if (!isError) {
+              this.newTaskContent = '';
+              this.closeAddModal();
+              await this.getTasks()
+            }
           }
         },
         updateTask() {
