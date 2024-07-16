@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI, Query, Request, Response, status, Cookie
+from fastapi import FastAPI, Query, Request, Response, status, Cookie, Path
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Tuple, Union, Literal, Optional, Dict, Any
@@ -8,7 +8,6 @@ from fastapi.templating import Jinja2Templates
 import os
 import uuid
 import db
-from datetime import datetime
 
 import bcrypt
 
@@ -44,13 +43,9 @@ class CreateTaskParam(BaseModel):
     content: str
 
 
-class UpdateTaskParam(BaseModel):
-    task_id: int
+class UpdateContentParam(BaseModel):
+    content: str
     done_flg: Literal["0", "1"]
-
-
-class DeleteTaskParam(BaseModel):
-    task_id: int
 
 
 # TODO Cookieの有効期限の再設定
@@ -75,6 +70,10 @@ def _set_cookie(response: Response, session_key: str) -> None:
         httponly=True,
         # httponly=True,  # JavaScriptからアクセスできないようにする
     )
+
+
+def _reset_cookie(response: Response) -> None:
+    response.set_cookie(key="shuttle_session_key", value="", max_age=0)
 
 
 def get_login_id_by_cookie(session_key: str) -> Optional[str]:
@@ -136,8 +135,7 @@ def login(login_param: LoginParam):
     # 認証エラー
     if result is False:
         response.status_code = status.HTTP_401_UNAUTHORIZED
-        # _reset_cookie(response)
-
+        _reset_cookie(response)
         return response
 
     # Cookieにセッションキーを付加してユーザ情報を返却
@@ -229,8 +227,8 @@ async def create_task(
 
 @app.put("/tasks/{task_id}")
 async def update_task(
-    task_id: int,
-    update_task_param: UpdateTaskParam,
+    upd_param: UpdateContentParam,
+    task_id: int = Path(title="The ID of the item to Update"),
     todo_session_key: Optional[str] = Cookie(None),
 ):
     response = Response()
@@ -239,16 +237,18 @@ async def update_task(
     if todo_session_key is None:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response
-    # 対象データの更新日時
-    update_time = datetime.now()
 
-    return {"id": task_id, "update_time": update_time}
+    login_id = get_login_id_by_cookie(todo_session_key)
+
+    # 更新したデータのid, 更新日時
+    result = db.update_task(login_id, task_id, upd_param)
+
+    return result
 
 
 @app.delete("/tasks/{task_id}")
 async def delete_task(
-    task_id: int,
-    delete_task_param: DeleteTaskParam,
+    task_id: int = Path(title="The ID of the item to Delete"),
     todo_session_key: Optional[str] = Cookie(None),
 ):
     response = Response()
@@ -257,10 +257,13 @@ async def delete_task(
     if todo_session_key is None:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response
-    # 対象データの更新日時
-    update_time = datetime.now()
 
-    return {"id": task_id, "update_time": update_time}
+    login_id = get_login_id_by_cookie(todo_session_key)
+
+    # 削除したデータのid, 更新日時
+    result = db.delete_task(login_id, task_id)
+
+    return result
 
 
 @app.get("/signup", response_class=HTMLResponse)

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import os
 import json
 from datetime import datetime
+from main import UpdateContentParam
 
 # dbディレクトリのパス
 db_dir = os.path.join(os.path.dirname(__file__), "db")
@@ -29,7 +30,7 @@ class TaskInfo(BaseModel):
 
 
 class TaskInfoResponse(BaseModel):
-    login_id: str
+    task_id: str
     update_time: str
 
 
@@ -185,7 +186,6 @@ def create_task(login_id: str, content: str) -> Optional[TaskInfoResponse]:
     # ログインIDに紐づくタスクが存在しているかをチェック
 
     for index, task in enumerate(tasks):
-        print("task", task)
         if task["login_id"] == login_id:
             target_task_info = task
             target_task_info_index = index
@@ -236,6 +236,108 @@ def create_task(login_id: str, content: str) -> Optional[TaskInfoResponse]:
         file.write(updated_json)
 
     return {
+        "task_id": new_id,
+        "update_time": formatted_date_time,
+    }
+
+
+def update_task(
+    login_id: str, task_id: int, upd_param: UpdateContentParam
+) -> Optional[TaskInfoResponse]:
+    tasks = get_data_from_db("tasks")
+    # 編集対象のタスク情報
+    target_task_info = None
+    target_task_info_index = None
+
+    # ログインIDに紐づくタスクが存在しているかをチェック
+    for index, task in enumerate(tasks):
+        if task["login_id"] == login_id:
+            target_task_info = task
+            target_task_info_index = index
+            break  # タスクが見つかったらループを抜ける
+
+    # ログインIDに紐づくタスク情報
+    target_task_list = target_task_info["task_list"]
+
+    # 対象データ更新
+    new_task_list = []
+
+    for task in target_task_list:
+        if task["id"] != task_id:
+            new_task_list.append(task)
+        else:
+            updated_task = {
+                "id": task_id,
+                "content": upd_param.content,
+                "done_flg": upd_param.done_flg,
+            }
+            new_task_list.append(updated_task)
+
+    # 現在の日時を取得
+    now = datetime.now()
+    # フォーマット
+    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    new_target_task_info = {
         "login_id": login_id,
+        "task_list": new_task_list,
+        "update_time": formatted_date_time,
+    }
+    tasks[target_task_info_index] = new_target_task_info
+
+    # 更新されたデータをJSON形式に変換
+    updated_json = json.dumps({"tasks": tasks}, indent=4)
+    # JSONファイルに更新データを書き込む
+    with open(tasks_file_path, "w") as file:
+        file.write(updated_json)
+
+    return {
+        "task_id": task_id,
+        "update_time": formatted_date_time,
+    }
+
+
+def delete_task(login_id: str, task_id: int) -> Optional[TaskInfoResponse]:
+    tasks = get_data_from_db("tasks")
+    # 編集対象のタスク情報
+    target_task_info = None
+    target_task_info_index = None
+
+    # ログインIDに紐づくタスクが存在しているかをチェック
+
+    for index, task in enumerate(tasks):
+        if task["login_id"] == login_id:
+            target_task_info = task
+            target_task_info_index = index
+            break  # タスクが見つかったらループを抜ける
+
+    # ログインIDに紐づくタスク情報
+    target_task_list = target_task_info["task_list"]
+
+    # 対象データ削除
+    new_task_list = [
+        item for item in target_task_list if item["id"] != task_id
+    ]
+
+    # 現在の日時を取得
+    now = datetime.now()
+    # フォーマット
+    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    new_target_task_info = {
+        "login_id": login_id,
+        "task_list": new_task_list,
+        "update_time": formatted_date_time,
+    }
+    tasks[target_task_info_index] = new_target_task_info
+
+    # 更新されたデータをJSON形式に変換
+    updated_json = json.dumps({"tasks": tasks}, indent=4)
+    # JSONファイルに更新データを書き込む
+    with open(tasks_file_path, "w") as file:
+        file.write(updated_json)
+
+    return {
+        "task_id": task_id,
         "update_time": formatted_date_time,
     }
