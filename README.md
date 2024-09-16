@@ -3,7 +3,8 @@
 Describe your project here.
 
 - launch
-  - 2024/5/23
+  - 2024/5
 - describe
-  - TODOアプリ
-
+  - TODO アプリ
+- 実行
+  - python src/main.py
