@@ -1,14 +1,8 @@
 from typing import Optional, Tuple, Literal, List
 from pydantic import BaseModel
-import os
-import json
 from datetime import datetime
 from main import UpdateContentParam
-
-# dbディレクトリのパス
-db_dir = os.path.join(os.path.dirname(__file__), "db")
-users_file_path = os.path.join(db_dir, "users.json")
-tasks_file_path = os.path.join(db_dir, "tasks.json")
+import mysql.connector
 
 
 class UserInfo(BaseModel):
@@ -34,39 +28,63 @@ class TaskInfoResponse(BaseModel):
     update_time: str
 
 
-def get_data_from_db(db_name: Literal["users", "tasks"]):
-    db_file_path: str
-    if db_name == "users":
-        db_file_path = users_file_path
-    if db_name == "tasks":
-        db_file_path = tasks_file_path
-
-    # json.load関数を使ったjsonファイルの読み込み
-    with open(db_file_path) as f:
-        db = json.load(f)
-
-    data = db[db_name]
-
-    return data
+def get_db_connection():
+    return mysql.connector.connect(
+        host="127.0.0.1",  # 接続情報は設定に合わせて変更必要
+        user="your_username",
+        password="your_password",
+        database="task_manager",
+    )
 
 
-def get_login_id_by_session_key(
-    session_key: str,
-) -> Optional[str]:
+def connect_db():
+    """
+    データベース接続を行い、接続オブジェクトとカーソルを返す
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    return conn, cursor
+
+
+def logout_user(session_key: str) -> bool:
+    """
+    ユーザーをログアウトする（session_valueを無効化）
+    :param session_key: ログイン中のセッションキー
+    :return: ログアウトが成功したかどうか（True/False）
+    """
+    # データベース接続
+    conn, cursor = connect_db()
+
+    # session_valueをNULLにして無効化
+    query = "UPDATE users SET session_value = NULL WHERE session_value = %s"
+    cursor.execute(query, (session_key,))
+
+    # ログアウトが成功したかどうか（更新された行数が1かどうか）
+    if cursor.rowcount == 1:
+        conn.commit()
+        success = True
+    else:
+        success = False
+
+    cursor.close()
+    conn.close()
+
+    return success
+
+
+def get_login_id_by_session_key(session_key: str) -> Optional[str]:
     """
     セッションキーからログインIDを取得する
     """
-    # json.load関数を使ったjsonファイルの読み込み
-    with open(users_file_path) as f:
-        db = json.load(f)
+    conn, cursor = connect_db()
+    query = "SELECT id FROM users WHERE session_value = %s"
+    cursor.execute(query, (session_key,))
+    result = cursor.fetchone()
 
-    users = db["users"]
+    cursor.close()
+    conn.close()
 
-    for user in users:
-        if user["session_value"] == session_key:
-            return user["id"]
-
-    return None
+    return result[0] if result else None
 
 
 def get_user_info_by_session_key(
@@ -75,16 +93,16 @@ def get_user_info_by_session_key(
     """
     セッションキーからログインIDとユーザー名をDBから取得する
     """
-    # json.load関数を使ったjsonファイルの読み込み
-    with open(users_file_path) as f:
-        db = json.load(f)
+    conn, cursor = connect_db()
+    query = "SELECT id, name FROM users WHERE session_value = %s"
+    cursor.execute(query, (session_key,))
+    result = cursor.fetchone()
 
-    users = db["users"]
+    cursor.close()
+    conn.close()
 
-    for user in users:
-        if user["session_value"] == session_key:
-            return user["id"], user["name"]
-
+    if result:
+        return result[0], result[1]  # login_id, nameを返す
     return None, None
 
 
@@ -94,16 +112,16 @@ def get_user_password_name(
     """
     パスワードとユーザー名をDBから取得する
     """
-    # json.load関数を使ったjsonファイルの読み込み
-    with open(users_file_path) as f:
-        db = json.load(f)
+    conn, cursor = connect_db()
+    query = "SELECT password, name FROM users WHERE id = %s"
+    cursor.execute(query, (login_id,))
+    result = cursor.fetchone()
 
-    users = db["users"]
+    cursor.close()
+    conn.close()
 
-    for user in users:
-        if user["id"] == login_id:
-            return user["password"], user["name"]
-
+    if result:
+        return result[0], result[1]
     return None, None
 
 
@@ -111,233 +129,170 @@ def update_login_info(login_id: str, session_key: str) -> None:
     """
     ログイン情報の更新
     """
-    users = get_data_from_db("users")
-    target_user_info: UserInfo
-    target_index: int
-
-    for index, user in enumerate(users):
-        if user["id"] == login_id:
-            target_index = index
-            target_user_info = user
-
-    updated_session_value_user = {
-        "id": login_id,
-        "password": target_user_info["password"],
-        "name": target_user_info["name"],
-        "session_value": session_key,
-    }
-    users[target_index] = updated_session_value_user
-
-    # 更新されたデータをJSON形式に変換
-    updated_json = json.dumps({"users": users}, indent=4)
-    # JSONファイルに更新データを書き込む
-    with open(users_file_path, "w") as file:
-        file.write(updated_json)
+    conn, cursor = connect_db()
+    query = "UPDATE users SET session_value = %s WHERE id = %s"
+    cursor.execute(query, (session_key, login_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 def create_user(login_id: str, password: str, user_name: str) -> bool:
-    users = get_data_from_db("users")
+    """
+    新しいユーザーをデータベースに作成する関数
+    成功したらTrueを返し、既にユーザーが存在している場合はFalseを返す
+    """
+    conn, cursor = connect_db()
+    query = "INSERT INTO users (id, password, name) VALUES (%s, %s, %s)"
 
-    # ログインIDが存在しているかをチェック
-    for user in users:
-        if user["id"] == login_id:
-            return False
-
-    # 存在していない場合は登録する
-    users.append({"id": login_id, "password": password, "name": user_name})
-
-    # 更新されたデータをJSON形式に変換
-    updated_json = json.dumps({"users": users}, indent=4)
-    # JSONファイルに更新データを書き込む
-    with open(users_file_path, "w") as file:
-        file.write(updated_json)
-
-    return True
+    try:
+        cursor.execute(query, (login_id, password, user_name))  # クエリを実行
+        conn.commit()  # データベースへの変更を確定
+        return True
+    except mysql.connector.IntegrityError:
+        # 主キーの重複などのIntegrityErrorが発生した場合
+        return False
+    finally:
+        cursor.close()  # クエリ完了後にカーソルを閉じる
+        conn.close()  # DB接続を閉じる
 
 
 def get_tasks_info_by_user_id(session_login_id: str) -> Optional[TaskInfo]:
     """
-    ログインIDから紐づくタスク一覧を取得する
+    ログインIDからそのユーザーのタスク一覧を取得する関数
     """
-    users = get_data_from_db("users")
-    tasks = get_data_from_db("tasks")
-    login_id: Optional[str] = None
+    conn = get_db_connection()
+    cursor = conn.cursor(
+        dictionary=True
+    )  # 結果を辞書形式で取得するカーソルを使用
 
-    # ログインIDが存在しているかをチェック
-    for user in users:
-        if user["session_value"] == session_login_id:
-            login_id = user["id"]
-            break
+    # ユーザーのログインIDをDBから取得
+    query = "SELECT id FROM users WHERE id = %s"
+    cursor.execute(query, (session_login_id,))
+    user = cursor.fetchone()  # ユーザー情報を1件取得
+    print("user", user)  # デバッグ用出力
+    print("session_login_id", session_login_id)  # デバッグ用出力
+    print("query", query)  # デバッグ用出力
 
-    # ログインIDに紐づくタスクが存在しているかをチェック
-    for task in tasks:
-        if task["login_id"] == login_id:
-            return task
+    if not user:  # ユーザーが存在しない場合
+        cursor.close()
+        conn.close()
+        return None
 
-    return None
+    login_id = user["id"]  # ユーザーIDを取得
+
+    # ユーザーのタスクを取得するクエリ
+    query = """
+    SELECT id, content, done_flg
+    FROM tasks
+    WHERE login_id = %s
+    """
+    cursor.execute(query, (login_id,))
+    tasks = cursor.fetchall()  # タスク情報を全件取得
+
+    cursor.close()
+    conn.close()
+
+    # TaskInfoオブジェクトを返す（タスク一覧を含む）
+    return TaskInfo(
+        login_id=login_id, task_list=[Task(**task) for task in tasks]
+    )
 
 
 def create_task(login_id: str, content: str) -> Optional[TaskInfoResponse]:
-    tasks = get_data_from_db("tasks")
-    # 編集対象のタスク情報
-    target_task_info = None
-    target_task_info_index = None
+    """
+    指定されたユーザーに対して新しいタスクを作成する関数
+    """
+    conn, cursor = connect_db()
 
-    # ログインIDに紐づくタスクが存在しているかをチェック
+    # タスクを追加するクエリ
+    query = """
+    INSERT INTO tasks (login_id, content, update_time)
+    VALUES (%s, %s, NOW())
+    """
+    cursor.execute(query, (login_id, content))
+    task_id = cursor.lastrowid  # 追加したタスクのIDを取得
 
-    for index, task in enumerate(tasks):
-        if task["login_id"] == login_id:
-            target_task_info = task
-            target_task_info_index = index
-            break  # タスクが見つかったらループを抜ける
+    # 追加したタスクの更新日時を取得するクエリ
+    query = "SELECT update_time FROM tasks WHERE id = %s"
+    cursor.execute(query, (task_id,))
+    update_time = cursor.fetchone()[0]  # 更新日時を取得
 
-    target_task_list = []
-    # 既に紐づくタスク情報が存在する場合はタスク情報を設定
-    if target_task_info is not None:
-        target_task_list = target_task_info["task_list"]
+    conn.commit()  # データベースへの変更を確定
+    cursor.close()
+    conn.close()
 
-    new_id: int = 1
-
-    # 最後の要素のid + 1を新規タスクのidとする
-    if not target_task_list:  # リストが空の場合
-        pass
-    else:
-        new_id = target_task_list[-1]["id"] + 1  # 最後の要素のid + 1
-
-    new_task = {
-        "id": new_id,
-        "content": content,
-        "done_flg": "0",
-    }
-
-    target_task_list.append(new_task)
-
-    # 現在の日時を取得
-    now = datetime.now()
-    # フォーマット
-    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    new_target_task_info = {
-        "login_id": login_id,
-        "task_list": target_task_list if content != "" else [],
-        "update_time": formatted_date_time,
-    }
-
-    if target_task_info_index is not None:
-        tasks[target_task_info_index] = new_target_task_info
-    else:
-        # 新規ユーザー登録時は最後尾にタスク情報を設定
-        tasks.append(new_target_task_info)
-
-    # 更新されたデータをJSON形式に変換
-    updated_json = json.dumps({"tasks": tasks}, indent=4)
-    # JSONファイルに更新データを書き込む
-    with open(tasks_file_path, "w") as file:
-        file.write(updated_json)
-
-    return {
-        "task_id": new_id,
-        "update_time": formatted_date_time,
-    }
+    # タスク情報のレスポンスを返す
+    return TaskInfoResponse(
+        task_id=str(task_id),
+        update_time=update_time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
 
 
 def update_task(
     login_id: str, task_id: int, upd_param: UpdateContentParam
 ) -> Optional[TaskInfoResponse]:
-    tasks = get_data_from_db("tasks")
-    # 編集対象のタスク情報
-    target_task_info = None
-    target_task_info_index = None
+    """
+    指定されたタスクを更新する関数
+    """
+    conn, cursor = connect_db()
 
-    # ログインIDに紐づくタスクが存在しているかをチェック
-    for index, task in enumerate(tasks):
-        if task["login_id"] == login_id:
-            target_task_info = task
-            target_task_info_index = index
-            break  # タスクが見つかったらループを抜ける
+    # タスクを更新するクエリ
+    query = """
+    UPDATE tasks
+    SET content = %s, done_flg = %s, update_time = NOW()
+    WHERE id = %s AND login_id = %s
+    """
+    cursor.execute(
+        query, (upd_param.content, upd_param.done_flg, task_id, login_id)
+    )
 
-    # ログインIDに紐づくタスク情報
-    target_task_list = target_task_info["task_list"]
+    if cursor.rowcount == 0:
+        # 更新対象のレコードが存在しない場合
+        cursor.close()
+        conn.close()
+        return None
 
-    # 対象データ更新
-    new_task_list = []
+    # 更新後のタスクの更新日時を取得するクエリ
+    query = "SELECT update_time FROM tasks WHERE id = %s"
+    cursor.execute(query, (task_id,))
+    update_time = cursor.fetchone()[0]  # 更新日時を取得
 
-    for task in target_task_list:
-        if task["id"] != task_id:
-            new_task_list.append(task)
-        else:
-            updated_task = {
-                "id": task_id,
-                "content": upd_param.content,
-                "done_flg": upd_param.done_flg,
-            }
-            new_task_list.append(updated_task)
+    conn.commit()  # データベースへの変更を確定
+    cursor.close()
+    conn.close()
 
-    # 現在の日時を取得
-    now = datetime.now()
-    # フォーマット
-    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    new_target_task_info = {
-        "login_id": login_id,
-        "task_list": new_task_list,
-        "update_time": formatted_date_time,
-    }
-    tasks[target_task_info_index] = new_target_task_info
-
-    # 更新されたデータをJSON形式に変換
-    updated_json = json.dumps({"tasks": tasks}, indent=4)
-    # JSONファイルに更新データを書き込む
-    with open(tasks_file_path, "w") as file:
-        file.write(updated_json)
-
-    return {
-        "task_id": task_id,
-        "update_time": formatted_date_time,
-    }
+    # 更新結果のレスポンスを返す
+    return TaskInfoResponse(
+        task_id=str(task_id),
+        update_time=update_time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
 
 
 def delete_task(login_id: str, task_id: int) -> Optional[TaskInfoResponse]:
-    tasks = get_data_from_db("tasks")
-    # 編集対象のタスク情報
-    target_task_info = None
-    target_task_info_index = None
+    """
+    指定されたタスクを削除する関数
+    """
+    conn, cursor = connect_db()
 
-    # ログインIDに紐づくタスクが存在しているかをチェック
+    # タスクを削除するクエリ
+    query = "DELETE FROM tasks WHERE id = %s AND login_id = %s"
+    cursor.execute(query, (task_id, login_id))
 
-    for index, task in enumerate(tasks):
-        if task["login_id"] == login_id:
-            target_task_info = task
-            target_task_info_index = index
-            break  # タスクが見つかったらループを抜ける
+    if cursor.rowcount == 0:
+        # 削除対象のレコードが存在しない場合
+        cursor.close()
+        conn.close()
+        return None
 
-    # ログインIDに紐づくタスク情報
-    target_task_list = target_task_info["task_list"]
+    update_time = datetime.now()  # 現在の日時を削除時間として使用
 
-    # 対象データ削除
-    new_task_list = [
-        item for item in target_task_list if item["id"] != task_id
-    ]
+    conn.commit()  # データベースへの変更を確定
+    cursor.close()
+    conn.close()
 
-    # 現在の日時を取得
-    now = datetime.now()
-    # フォーマット
-    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    new_target_task_info = {
-        "login_id": login_id,
-        "task_list": new_task_list,
-        "update_time": formatted_date_time,
-    }
-    tasks[target_task_info_index] = new_target_task_info
-
-    # 更新されたデータをJSON形式に変換
-    updated_json = json.dumps({"tasks": tasks}, indent=4)
-    # JSONファイルに更新データを書き込む
-    with open(tasks_file_path, "w") as file:
-        file.write(updated_json)
-
-    return {
-        "task_id": task_id,
-        "update_time": formatted_date_time,
-    }
+    # 削除結果のレスポンスを返す
+    return TaskInfoResponse(
+        task_id=str(task_id),
+        update_time=update_time.strftime("%Y-%m-%d %H:%M:%S"),
+    )

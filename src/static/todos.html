@@ -1,246 +1,279 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/bootstrap/3.2.0/css/bootstrap.css">
-  <link rel="stylesheet" href="css/todos.css" type="text/css">
-  <title>todos</title>
-</head>
-<body>
-  <div class="container" x-data="todoApp" x-init="initialize" x-cloak>
-    <h1>TODO 一覧</h1>
-    <div class="input-group">
-      <button @click="openAddTaskModal">追加</button>
-    </div>
-    <ul>
-      <template x-for="(todo, index) in todos" :key="index">
-        <li>
-          <span :class="{ 'done': todo.done_flg === '1' }" @click="toggleComplete(todo)" x-text="todo.content"></span>
-          <div>
-            <button class="update" @click="openUpdateTaskModal(todo.id)">更新</button>
-            <button class="delete" @click="deleteTask(todo.id)">削除</button>
-        </div>
-        </li>
-      </template>
-    </ul>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/bootstrap/3.2.0/css/bootstrap.css"
+    />
+    <link rel="stylesheet" href="css/todos.css" type="text/css" />
+    <title>todos</title>
+  </head>
+  <body>
+    <div class="container" x-data="todoApp" x-init="initialize" x-cloak>
+      <h1>TODO 一覧</h1>
+      <div class="input-group">
+        <button @click="openAddTaskModal">追加</button>
+      </div>
+      <ul>
+        <template x-for="(todo, index) in todos" :key="index">
+          <li>
+            <span
+              :class="{ 'done': todo.done_flg === '1' }"
+              @click="toggleComplete(todo)"
+              x-text="todo.content"
+            ></span>
+            <div>
+              <button class="update" @click="openUpdateTaskModal(todo.id)">
+                更新
+              </button>
+              <button class="delete" @click="deleteTask(todo.id)">削除</button>
+            </div>
+          </li>
+        </template>
+      </ul>
 
-    <!-- 追加モーダル -->
-    <div x-show="isAddModalOpen" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeAddModal">&times;</span>
-        <h2>TODO追加</h2>
-        <div class="input-container">
-          <input type="text" x-model="newTaskContent" @keydown.enter="addTask">
-          <button class="update" @click="addTask">追加</button>
+      <!-- 追加モーダル -->
+      <div x-show="isAddModalOpen" class="modal">
+        <div class="modal-content">
+          <span class="close" @click="closeAddModal">&times;</span>
+          <h2>TODO追加</h2>
+          <div class="input-container">
+            <input
+              type="text"
+              x-model="newTaskContent"
+              @keydown.enter="addTask"
+            />
+            <button class="update" @click="addTask">追加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 更新モーダル -->
+      <div x-show="isUpdateModalOpen" class="modal">
+        <div class="modal-content">
+          <span class="close" @click="closeUpdateModal">&times;</span>
+          <h2>TODO更新</h2>
+          <div class="input-container">
+            <input
+              type="text"
+              x-model="updateTaskContent"
+              @keydown.enter="updateTask('0')"
+            />
+            <button class="update" @click="updateTask('0')">更新</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 更新モーダル -->
-    <div x-show="isUpdateModalOpen" class="modal">
-      <div class="modal-content">
-        <span class="close" @click="closeUpdateModal">&times;</span>
-        <h2>TODO更新</h2>
-        <div class="input-container">
-          <input type="text" x-model="updateTaskContent" @keydown.enter="updateTask('0')">
-          <button class="update" @click="updateTask('0')">更新</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    document.addEventListener('alpine:init', () => {
-      Alpine.data('todoApp', () => ({
-        loginId: null,
-        userName: null,
-        newTaskContent: '',
-        todos: [],
-        selectedTaskId: null,
-        isUpdateModalOpen: false,
-        isAddModalOpen: false,
-        updateTaskContent: '',
-        currentTaskIndex: null,
-        isSuccessCheckSession: false,
-        async initialize() {
-          await this.check_session()
-          if (this.isSuccessCheckSession) {
-            await this.getTasks()
-          }
-        },
-        get_host_info() {
-          const protocol = window.location.protocol.split(':')[0];
-          const host = window.location.host.split(':')[0];
-          let port = window.location.host.split(':')[1];
-          if (port === undefined) {
-            if (protocol == 'http') { port = 80 }
-            else if (protocol == 'https') { port = 443 }
-            else { port = 0 }
-          }
-          return { protocol, host, port };
-        },
-        create_request(urlPath, method, param) {
-          const { protocol, host, port } = this.get_host_info();
-          const url = `${protocol}://${host}:${port}/${urlPath}`;
-          // リクエストヘッダーの生成
-          const headers = new Headers();
-          headers.append('Content-Type', 'application/json');
-
-          // リクエストの構築
-          const request = new Request(url, {
-            method: method,
-            headers: headers,
-            body: param ? JSON.stringify(param) : null
-          });
-          return request
-        },
-        async getTasks() {
-          const request = this.create_request("tasks", "GET")
-          await fetch(request).then(response => {
-            // レスポンス変換
-            return response.json();
-          })
-          .then(data => {
-            // データ処理
-            this.todos = data["task_list"]
-            return
-          })
-          .catch(error => {
-            // エラー処理
-            alert("タスク取得に失敗しました")
-            return error
-          });
-        },
-        // セッションCookieをキーとして自己情報を取得することで、ログイン状態かを判断し、表示する自己情報を取得する
-        async check_session() {
-          const request = this.create_request("myself", "GET")
-          await fetch(request).then(response => {
-            // レスポンス変換
-            return response.json();
-          })
-          .then(data => {
-            // データ処理
-            this.loginId = data.login_id
-            this.userName = data.user_name
-            this.isSuccessCheckSession = true
-            return
-          })
-          .catch(error => {
-            // エラー処理
-            // セッションが切れている場合はログイン画面へ
-            alert("error")
-            // location.href = "/"
-          });
-        },
-        openAddTaskModal() {
-          this.isAddModalOpen = true;
-        },
-        closeAddModal() {
-          this.isAddModalOpen = false;
-          this.newTaskContent = '';
-        },
-        openUpdateTaskModal(taskId) {
-          this.isUpdateModalOpen = true;
-          this.selectedTaskId = taskId
-        },
-        closeUpdateModal() {
-          this.isUpdateModalOpen = false;
-          this.updateTaskContent = '';
-          this.currentTaskIndex = null;
-        },
-        async addTask() {
-          if (this.newTaskContent.trim() !== '') {
-            const request = this.create_request("tasks", "POST", {"content": this.newTaskContent})
-            let isError = false
-            await fetch(request).then(response => {
-              // レスポンス変換
-              return response.json();
-            })
-            .then(data => {
-              // データ処理
-              this.todos = data["task_list"]
-              return
-              })
-            .catch(error => {
-              // エラー処理
-              alert("タスク登録に失敗しました")
-              isError = true
-              return error
-            });
-
-            if (!isError) {
-              this.newTaskContent = '';
-              this.closeAddModal();
-              await this.getTasks()
+    <script>
+      document.addEventListener("alpine:init", () => {
+        Alpine.data("todoApp", () => ({
+          loginId: null,
+          userName: null,
+          newTaskContent: "",
+          todos: [],
+          selectedTaskId: null,
+          isUpdateModalOpen: false,
+          isAddModalOpen: false,
+          updateTaskContent: "",
+          currentTaskIndex: null,
+          isSuccessCheckSession: false,
+          async initialize() {
+            await this.check_session();
+            if (this.isSuccessCheckSession) {
+              await this.getTasks();
             }
-          }
-        },
-        async updateTask(doneFlg) {
-          if (this.updateTaskContent.trim() !== '') {
-            const request = this.create_request(`tasks/${this.selectedTaskId}`, "PUT",
-              {
-                "content": this.updateTaskContent,
-                "done_flg": doneFlg
+          },
+          get_host_info() {
+            const protocol = window.location.protocol.split(":")[0];
+            const host = window.location.host.split(":")[0];
+            let port = window.location.host.split(":")[1];
+            if (port === undefined) {
+              if (protocol == "http") {
+                port = 80;
+              } else if (protocol == "https") {
+                port = 443;
+              } else {
+                port = 0;
               }
-            )
+            }
+            return { protocol, host, port };
+          },
+          create_request(urlPath, method, param) {
+            const { protocol, host, port } = this.get_host_info();
+            const url = `${protocol}://${host}:${port}/${urlPath}`;
+            // リクエストヘッダーの生成
+            const headers = new Headers();
+            headers.append("Content-Type", "application/json");
 
-            let isError = false
-            await fetch(request).then(response => {
-              // レスポンス変換
-              return response.json();
-            })
-            .then(data => {
-              // データ処理
-              return
-            })
-            .catch(error => {
-              // エラー処理
-              alert("タスク更新に失敗しました")
-              isError = true
-              return error
+            // リクエストの構築
+            const request = new Request(url, {
+              method: method,
+              headers: headers,
+              body: param ? JSON.stringify(param) : null,
             });
+            return request;
+          },
+          async getTasks() {
+            const request = this.create_request("tasks", "GET");
+            await fetch(request)
+              .then((response) => {
+                // レスポンス変換
+                return response.json();
+              })
+              .then((data) => {
+                // データ処理
+                this.todos = data["task_list"];
+                return;
+              })
+              .catch((error) => {
+                // エラー処理
+                alert("タスク取得に失敗しました");
+                return error;
+              });
+          },
+          // セッションCookieをキーとして自己情報を取得することで、ログイン状態かを判断し、表示する自己情報を取得する
+          async check_session() {
+            const request = this.create_request("myself", "GET");
+            await fetch(request)
+              .then((response) => {
+                // レスポンス変換
+                return response.json();
+              })
+              .then((data) => {
+                // データ処理
+                this.loginId = data.login_id;
+                this.userName = data.user_name;
+                this.isSuccessCheckSession = true;
+                return;
+              })
+              .catch((error) => {
+                // エラー処理
+                // セッションが切れている場合はログイン画面へ
+                alert("error");
+                // location.href = "/"
+              });
+          },
+          openAddTaskModal() {
+            this.isAddModalOpen = true;
+          },
+          closeAddModal() {
+            this.isAddModalOpen = false;
+            this.newTaskContent = "";
+          },
+          openUpdateTaskModal(taskId) {
+            this.isUpdateModalOpen = true;
+            this.selectedTaskId = taskId;
+          },
+          closeUpdateModal() {
+            this.isUpdateModalOpen = false;
+            this.updateTaskContent = "";
+            this.currentTaskIndex = null;
+          },
+          async addTask() {
+            if (this.newTaskContent.trim() !== "") {
+              const request = this.create_request("tasks", "POST", {
+                content: this.newTaskContent,
+              });
+              let isError = false;
+              await fetch(request)
+                .then((response) => {
+                  // レスポンス変換
+                  return response.json();
+                })
+                .then((data) => {
+                  // データ処理
+                  this.todos = data["task_list"];
+                  return;
+                })
+                .catch((error) => {
+                  // エラー処理
+                  alert("タスク登録に失敗しました");
+                  isError = true;
+                  return error;
+                });
+
+              if (!isError) {
+                this.newTaskContent = "";
+                this.closeAddModal();
+                await this.getTasks();
+              }
+            }
+          },
+          async updateTask(doneFlg) {
+            if (this.updateTaskContent.trim() !== "") {
+              const request = this.create_request(
+                `tasks/${this.selectedTaskId}`,
+                "PUT",
+                {
+                  content: this.updateTaskContent,
+                  done_flg: doneFlg,
+                }
+              );
+
+              let isError = false;
+              await fetch(request)
+                .then((response) => {
+                  // レスポンス変換
+                  return response.json();
+                })
+                .then((data) => {
+                  // データ処理
+                  return;
+                })
+                .catch((error) => {
+                  // エラー処理
+                  alert("タスク更新に失敗しました");
+                  isError = true;
+                  return error;
+                });
+
+              if (!isError) {
+                this.updateTaskContent = "";
+                this.selectedTaskId = null;
+                this.closeUpdateModal();
+                await this.getTasks();
+              }
+            }
+          },
+          toggleComplete(todoInfo) {
+            this.selectedTaskId = todoInfo.id;
+            this.updateTaskContent = todoInfo.content;
+            this.updateTask(todoInfo.done_flg === "0" ? "1" : "0");
+          },
+          async deleteTask(taskId) {
+            const request = this.create_request(`tasks/${taskId}`, "DELETE");
+            let isError = false;
+            await fetch(request)
+              .then((response) => {
+                // レスポンス変換
+                return response.json();
+              })
+              .then((data) => {
+                // データ処理
+                return;
+              })
+              .catch((error) => {
+                // エラー処理
+                alert("タスク削除に失敗しました");
+                isError = true;
+                return error;
+              });
 
             if (!isError) {
-              this.updateTaskContent = '';
-              this.selectedTaskId = null
-              this.closeUpdateModal();
-              await this.getTasks()
+              this.newTaskContent = "";
+              this.closeAddModal();
+              await this.getTasks();
             }
-          }
-        },
-        toggleComplete(todoInfo) {
-          this.selectedTaskId = todoInfo.id
-          this.updateTaskContent = todoInfo.content
-          this.updateTask(todoInfo.done_flg === "0" ? "1" : "0")
-        },
-        async deleteTask(taskId) {
-          const request = this.create_request(`tasks/${taskId}`, "DELETE")
-          let isError = false
-          await fetch(request).then(response => {
-            // レスポンス変換
-            return response.json();
-          })
-          .then(data => {
-            // データ処理
-            return
-          })
-          .catch(error => {
-            // エラー処理
-            alert("タスク削除に失敗しました")
-            isError = true
-            return error
-          });
-
-          if (!isError) {
-            this.newTaskContent = '';
-            this.closeAddModal();
-            await this.getTasks()
-          }
-        },
-      }));
-    });
-  </script>
-</body>
+          },
+        }));
+      });
+    </script>
+  </body>
 </html>

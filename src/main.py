@@ -48,10 +48,9 @@ class UpdateContentParam(BaseModel):
     done_flg: Literal["0", "1"]
 
 
-# TODO Cookieの有効期限の再設定
 # new テンプレート関連の設定 (jinja2)
 templates = Jinja2Templates(directory=static_dir)
-jinja_env = templates.env  # Jinja2.Environment : filterやglobalの設定用
+jinja_env = templates.env
 
 
 def create_password_hash(plain_password: str) -> str:
@@ -86,9 +85,7 @@ def check_login(
     db_password: Union[str, None] = None
     db_user_name: Union[str, None] = None
 
-    db_password, db_user_name = db.get_user_password_name(
-        login_param.login_id
-    )
+    db_password, db_user_name = db.get_user_password_name(login_param.login_id)
 
     # ログインID不一致
     if db_password is None:
@@ -122,9 +119,12 @@ def get_user_info_by_session_key(
 
 
 def create_new_user(login_id: str, password: str, user_name: str) -> bool:
-    return db.create_user(
-        login_id, create_password_hash(password), user_name
-    )
+    return db.create_user(login_id, create_password_hash(password), user_name)
+
+
+@app.post("/hello")
+def hello():
+    return {"msg": "Hello, World!!!!"}
 
 
 @app.post("/login")
@@ -196,7 +196,14 @@ async def get_tasks(todo_session_key: Optional[str] = Cookie(None)):
     """
     login_idに紐づくタスクをDBから全件取得する
     """
-    result = db.get_tasks_info_by_user_id(todo_session_key)
+    if todo_session_key is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    login_id = get_login_id_by_cookie(todo_session_key)
+    if login_id is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    result = db.get_tasks_info_by_user_id(login_id)
     if result:
         return result
     else:
